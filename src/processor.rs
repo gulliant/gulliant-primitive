@@ -16,7 +16,7 @@ use crate::{
         ActivityEvent, ActivityEventAccount, ExportAuthorization, ExportAuthorizationState,
         MigratedStateLink, UserLogState,
     },
-    utils::{compute_event_hash, verify_log_chain, verify_signer},
+    utils::{compute_event_hash, verify_signer},
 };
 
 const USER_LOG_SEED: &[u8] = b"user_log";
@@ -404,9 +404,6 @@ impl Processor {
         if !old_log.is_initialized {
             return Err(ProgramError::UninitializedAccount);
         }
-        if old_log.is_migrated {
-            return Err(GulliantError::WalletAlreadyMigrated.into());
-        }
         drop(old_log_data);
 
         let (expected_auth_pda, _) = Pubkey::find_program_address(
@@ -431,9 +428,16 @@ impl Processor {
         if !auth_state.is_initialized {
             return Err(ProgramError::UninitializedAccount);
         }
+        drop(auth_data);
+
+        // EARLY REPLAY PROTECTION
+        if old_log.is_migrated {
+            return Err(GulliantError::WalletAlreadyMigrated.into());
+        }
         if auth_state.used {
             return Err(GulliantError::ExportAuthorizationAlreadyUsed.into());
         }
+
         if current_timestamp > auth_state.auth.authorized_until {
             return Err(GulliantError::ExportAuthorizationExpired.into());
         }
@@ -446,7 +450,6 @@ impl Processor {
         if auth_state.auth.log_snapshot_hash != old_log.last_hash {
             return Err(GulliantError::SnapshotHashMismatch.into());
         }
-        drop(auth_data);
 
         let (expected_new_pda, bump_new) = Pubkey::find_program_address(
             &[USER_LOG_SEED, protocol_id.as_ref(), new_wallet.as_ref()],
@@ -486,38 +489,13 @@ impl Processor {
             let new_log_data = new_user_log_account.try_borrow_data()?;
             let mut new_log_slice: &[u8] = &new_log_data;
             let existing_new_log = UserLogState::deserialize(&mut new_log_slice)?;
-            if existing_new_log.is_migrated {
+
+            if existing_new_log.is_initialized {
                 return Err(GulliantError::WalletAlreadyMigrated.into());
             }
+
             drop(new_log_data);
         }
-
-        let new_log_state = UserLogState {
-            is_initialized: true,
-            wallet: new_wallet,
-            protocol_id,
-            last_hash: old_log.last_hash,
-            event_count: old_log.event_count,
-            migrated_to: None,
-            is_migrated: false,
-        };
-
-        let mut new_log_data_mut = new_user_log_account.try_borrow_mut_data()?;
-        new_log_state.serialize(&mut &mut new_log_data_mut[..])?;
-        drop(new_log_data_mut);
-
-        let mut old_log_mut = old_log;
-        old_log_mut.is_migrated = true;
-        old_log_mut.migrated_to = Some(new_wallet);
-
-        let mut old_log_data_mut = old_user_log_account.try_borrow_mut_data()?;
-        old_log_mut.serialize(&mut &mut old_log_data_mut[..])?;
-        drop(old_log_data_mut);
-
-        auth_state.used = true;
-        let mut auth_data_mut = export_auth_account.try_borrow_mut_data()?;
-        auth_state.serialize(&mut &mut auth_data_mut[..])?;
-        drop(auth_data_mut);
 
         let (expected_link_pda, bump_link) = Pubkey::find_program_address(
             &[
@@ -558,9 +536,38 @@ impl Processor {
                     &[bump_link],
                 ]],
             )?;
-        } else if migrated_link_account.owner != program_id {
+        } else if migrated_link_account.owner == program_id {
+            return Err(GulliantError::ExportAuthorizationAlreadyUsed.into());
+        } else {
             return Err(ProgramError::InvalidAccountOwner);
         }
+
+        let new_log_state = UserLogState {
+            is_initialized: true,
+            wallet: new_wallet,
+            protocol_id,
+            last_hash: old_log.last_hash,
+            event_count: old_log.event_count,
+            migrated_to: None,
+            is_migrated: false,
+        };
+
+        let mut new_log_data_mut = new_user_log_account.try_borrow_mut_data()?;
+        new_log_state.serialize(&mut &mut new_log_data_mut[..])?;
+        drop(new_log_data_mut);
+
+        let mut old_log_mut = old_log;
+        old_log_mut.is_migrated = true;
+        old_log_mut.migrated_to = Some(new_wallet);
+
+        let mut old_log_data_mut = old_user_log_account.try_borrow_mut_data()?;
+        old_log_mut.serialize(&mut &mut old_log_data_mut[..])?;
+        drop(old_log_data_mut);
+
+        auth_state.used = true;
+        let mut auth_data_mut = export_auth_account.try_borrow_mut_data()?;
+        auth_state.serialize(&mut &mut auth_data_mut[..])?;
+        drop(auth_data_mut);
 
         let link = MigratedStateLink {
             old_wallet,
@@ -576,4 +583,3 @@ impl Processor {
         Ok(())
     }
 }
-

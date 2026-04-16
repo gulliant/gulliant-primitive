@@ -525,3 +525,191 @@ async fn test_snapshot_mismatch() {
     let code = get_custom_error_code(err).unwrap();
     assert_eq!(code, GulliantError::SnapshotHashMismatch as u32);
 }
+
+#[tokio::test]
+async fn test_replay_attempt() {
+    let (mut context, protocol_keypair, user_keypair) = setup().await;
+    let wallet = user_keypair.pubkey();
+    let protocol_id = protocol_keypair.pubkey();
+
+    fund_account(&mut context, &wallet, 10_000_000).await;
+    fund_account(&mut context, &protocol_id, 10_000_000).await;
+
+    let (user_log_pda, _) = Pubkey::find_program_address(
+        &[b"user_log", protocol_id.as_ref(), wallet.as_ref()],
+        &PROGRAM_ID,
+    );
+
+    let init_ix = Instruction {
+        program_id: PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(user_log_pda, false),
+            AccountMeta::new(wallet, true),
+            AccountMeta::new(system_program::ID, false),
+        ],
+        data: to_vec(&GulliantInstruction::InitializeUserLog { wallet, protocol_id }).unwrap(),
+    };
+
+    let tx = Transaction::new_signed_with_payer(
+        &[init_ix],
+        Some(&context.payer.pubkey()),
+        &[&context.payer, &user_keypair],
+        context.last_blockhash,
+    );
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    let (event_pda, _) = Pubkey::find_program_address(
+        &[
+            b"activity_event",
+            protocol_id.as_ref(),
+            wallet.as_ref(),
+            &0u64.to_le_bytes(),
+        ],
+        &PROGRAM_ID,
+    );
+
+    let append_ix = Instruction {
+        program_id: PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(user_log_pda, false),
+            AccountMeta::new(event_pda, false),
+            AccountMeta::new(protocol_id, true),
+            AccountMeta::new(system_program::ID, false),
+        ],
+        data: to_vec(&GulliantInstruction::AppendActivityEvent {
+            wallet,
+            protocol_id,
+            event_type: 1,
+            magnitude: 100,
+            timestamp: 1000,
+        })
+        .unwrap(),
+    };
+
+    let tx = Transaction::new_signed_with_payer(
+        &[append_ix],
+        Some(&context.payer.pubkey()),
+        &[&context.payer, &protocol_keypair],
+        context.last_blockhash,
+    );
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    let new_wallet = Keypair::new().pubkey();
+    let (auth_pda, _) = Pubkey::find_program_address(
+        &[
+            b"export_auth",
+            wallet.as_ref(),
+            new_wallet.as_ref(),
+            protocol_id.as_ref(),
+        ],
+        &PROGRAM_ID,
+    );
+
+    let auth_ix = Instruction {
+        program_id: PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(user_log_pda, false),
+            AccountMeta::new(auth_pda, false),
+            AccountMeta::new(protocol_id, true),
+            AccountMeta::new(system_program::ID, false),
+        ],
+        data: to_vec(&GulliantInstruction::AuthorizeExport {
+            old_wallet: wallet,
+            new_wallet,
+            protocol_id,
+            authorized_until: 2000,
+        })
+        .unwrap(),
+    };
+
+    let tx = Transaction::new_signed_with_payer(
+        &[auth_ix],
+        Some(&context.payer.pubkey()),
+        &[&context.payer, &protocol_keypair],
+        context.last_blockhash,
+    );
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    let (new_user_log_pda, _) = Pubkey::find_program_address(
+        &[b"user_log", protocol_id.as_ref(), new_wallet.as_ref()],
+        &PROGRAM_ID,
+    );
+    let (link_pda, _) = Pubkey::find_program_address(
+        &[
+            b"migrated_link",
+            wallet.as_ref(),
+            new_wallet.as_ref(),
+            protocol_id.as_ref(),
+        ],
+        &PROGRAM_ID,
+    );
+
+    let migrate_ix = Instruction {
+        program_id: PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(user_log_pda, false),
+            AccountMeta::new(new_user_log_pda, false),
+            AccountMeta::new(auth_pda, false),
+            AccountMeta::new(link_pda, false),
+            AccountMeta::new(wallet, true),
+            AccountMeta::new(system_program::ID, false),
+        ],
+        data: to_vec(&GulliantInstruction::MigrateState {
+            old_wallet: wallet,
+            new_wallet,
+            protocol_id,
+            current_timestamp: 1500,
+        })
+        .unwrap(),
+    };
+
+    let tx = Transaction::new_signed_with_payer(
+        &[migrate_ix.clone()],
+        Some(&context.payer.pubkey()),
+        &[&context.payer, &user_keypair],
+        context.last_blockhash,
+    );
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+
+    let old_log_account = context
+        .banks_client
+        .get_account(user_log_pda)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut old_log_slice: &[u8] = &old_log_account.data;
+    let old_log = UserLogState::deserialize(&mut old_log_slice).unwrap();
+
+    assert!(old_log.is_migrated);
+    assert_eq!(old_log.migrated_to, Some(new_wallet));
+
+    let auth_account = context
+        .banks_client
+        .get_account(auth_pda)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut auth_slice: &[u8] = &auth_account.data;
+    let auth_state = ExportAuthorizationState::deserialize(&mut auth_slice).unwrap();
+
+    assert!(auth_state.used);
+
+    let tx = Transaction::new_signed_with_payer(
+        &[migrate_ix],
+        Some(&context.payer.pubkey()),
+        &[&context.payer, &user_keypair],
+        context.last_blockhash,
+    );
+
+    let err = context.banks_client.process_transaction(tx).await.unwrap_err();
+    let code = get_custom_error_code(err).unwrap();
+
+    assert!(
+        code == GulliantError::ExportAuthorizationAlreadyUsed as u32
+            || code == GulliantError::WalletAlreadyMigrated as u32,
+        "unexpected replay error code: {}",
+        code
+    );
+}
