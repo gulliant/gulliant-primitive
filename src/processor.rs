@@ -1,4 +1,5 @@
 use borsh::{BorshDeserialize, BorshSerialize};
+use solana_program::sysvar::Sysvar;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
@@ -7,7 +8,6 @@ use solana_program::{
     pubkey::Pubkey,
     system_instruction, system_program,
 };
-use solana_program::sysvar::Sysvar;
 
 use crate::{
     error::GulliantError,
@@ -101,17 +101,21 @@ impl Processor {
     ) -> ProgramResult {
         let accounts_iter = &mut accounts.iter();
         let protocol_config_account = next_account_info(accounts_iter)?;
-        let payer = next_account_info(accounts_iter)?;
+        let authority_signer = next_account_info(accounts_iter)?;
         let system_program = next_account_info(accounts_iter)?;
 
-        if !verify_signer(payer) {
-            return Err(GulliantError::MissingUserSignature.into());
+        if !verify_signer(authority_signer) {
+            return Err(GulliantError::MissingProtocolSignature.into());
         }
 
-        let (expected_pda, bump) = Pubkey::find_program_address(
-            &[PROTOCOL_CONFIG_SEED, protocol_id.as_ref()],
-            program_id,
-        );
+        // Root trust anchor:
+        // only the authority key itself may initialize its ProtocolConfig.
+        if authority_signer.key != &authority {
+            return Err(GulliantError::InvalidProtocolAuthority.into());
+        }
+
+        let (expected_pda, bump) =
+            Pubkey::find_program_address(&[PROTOCOL_CONFIG_SEED, protocol_id.as_ref()], program_id);
         if expected_pda != *protocol_config_account.key {
             return Err(ProgramError::InvalidAccountData);
         }
@@ -133,14 +137,14 @@ impl Processor {
 
             invoke_signed(
                 &system_instruction::create_account(
-                    payer.key,
+                    authority_signer.key,
                     protocol_config_account.key,
                     lamports,
                     ProtocolConfig::LEN as u64,
                     program_id,
                 ),
                 &[
-                    payer.clone(),
+                    authority_signer.clone(),
                     protocol_config_account.clone(),
                     system_program.clone(),
                 ],
@@ -254,10 +258,8 @@ impl Processor {
             return Err(GulliantError::MissingProtocolSignature.into());
         }
 
-        let (expected_config_pda, _) = Pubkey::find_program_address(
-            &[PROTOCOL_CONFIG_SEED, protocol_id.as_ref()],
-            program_id,
-        );
+        let (expected_config_pda, _) =
+            Pubkey::find_program_address(&[PROTOCOL_CONFIG_SEED, protocol_id.as_ref()], program_id);
         if expected_config_pda != *protocol_config_account.key {
             return Err(ProgramError::InvalidAccountData);
         }
@@ -298,16 +300,15 @@ impl Processor {
         }
         drop(user_log_data);
 
+        // prev_hash is not user-supplied. It is derived internally from the chain head.
         let prev_hash = user_log.last_hash;
         let new_hash =
             compute_event_hash(&wallet, &protocol_id, event_type, magnitude, timestamp, &prev_hash);
         let new_index = user_log.event_count;
-
         let index_bytes = new_index.to_le_bytes();
 
         // Append-only invariant:
         // a new event can only be written to the PDA derived from the current event_count.
-        // Existing event accounts cannot be reused because the expected PDA changes as event_count grows.
         let (expected_event_pda, bump) = Pubkey::find_program_address(
             &[ACTIVITY_EVENT_SEED, protocol_id.as_ref(), wallet.as_ref(), &index_bytes],
             program_id,
@@ -396,10 +397,8 @@ impl Processor {
             return Err(GulliantError::MissingProtocolSignature.into());
         }
 
-        let (expected_config_pda, _) = Pubkey::find_program_address(
-            &[PROTOCOL_CONFIG_SEED, protocol_id.as_ref()],
-            program_id,
-        );
+        let (expected_config_pda, _) =
+            Pubkey::find_program_address(&[PROTOCOL_CONFIG_SEED, protocol_id.as_ref()], program_id);
         if expected_config_pda != *protocol_config_account.key {
             return Err(ProgramError::InvalidAccountData);
         }
@@ -576,10 +575,8 @@ impl Processor {
         }
         drop(auth_data);
 
-        let (expected_config_pda, _) = Pubkey::find_program_address(
-            &[PROTOCOL_CONFIG_SEED, protocol_id.as_ref()],
-            program_id,
-        );
+        let (expected_config_pda, _) =
+            Pubkey::find_program_address(&[PROTOCOL_CONFIG_SEED, protocol_id.as_ref()], program_id);
         if expected_config_pda != *protocol_config_account.key {
             return Err(ProgramError::InvalidAccountData);
         }

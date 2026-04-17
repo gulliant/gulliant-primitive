@@ -69,8 +69,8 @@ async fn fund_account(context: &mut ProgramTestContext, recipient: &Pubkey, lamp
 
 async fn init_protocol_config(
     context: &mut ProgramTestContext,
+    authority_keypair: &Keypair,
     protocol_id: Pubkey,
-    authority: Pubkey,
 ) -> Pubkey {
     let (protocol_config_pda, _) = Pubkey::find_program_address(
         &[b"protocol_config", protocol_id.as_ref()],
@@ -81,20 +81,20 @@ async fn init_protocol_config(
         program_id: PROGRAM_ID,
         accounts: vec![
             AccountMeta::new(protocol_config_pda, false),
-            AccountMeta::new(context.payer.pubkey(), true),
+            AccountMeta::new(authority_keypair.pubkey(), true),
             AccountMeta::new(system_program::ID, false),
         ],
         data: to_vec(&GulliantInstruction::InitializeProtocolConfig {
             protocol_id,
-            authority,
+            authority: authority_keypair.pubkey(),
         })
         .unwrap(),
     };
 
     let tx = Transaction::new_signed_with_payer(
         &[init_config_ix],
-        Some(&context.payer.pubkey()),
-        &[&context.payer],
+        Some(&authority_keypair.pubkey()),
+        &[authority_keypair],
         context.last_blockhash,
     );
 
@@ -114,7 +114,7 @@ async fn test_happy_path() {
     fund_account(&mut context, &protocol_id, 10_000_000).await;
 
     let protocol_config_pda =
-        init_protocol_config(&mut context, protocol_id, protocol_keypair.pubkey()).await;
+        init_protocol_config(&mut context, &protocol_keypair, protocol_id).await;
 
     let (user_log_pda, _) = Pubkey::find_program_address(
         &[b"user_log", protocol_id.as_ref(), wallet.as_ref()],
@@ -324,7 +324,7 @@ async fn test_missing_protocol_signature() {
     fund_account(&mut context, &protocol_id, 10_000_000).await;
 
     let protocol_config_pda =
-        init_protocol_config(&mut context, protocol_id, protocol_keypair.pubkey()).await;
+        init_protocol_config(&mut context, &protocol_keypair, protocol_id).await;
 
     let (user_log_pda, _) = Pubkey::find_program_address(
         &[b"user_log", protocol_id.as_ref(), wallet.as_ref()],
@@ -402,7 +402,7 @@ async fn test_snapshot_mismatch() {
     fund_account(&mut context, &protocol_id, 10_000_000).await;
 
     let protocol_config_pda =
-        init_protocol_config(&mut context, protocol_id, protocol_keypair.pubkey()).await;
+        init_protocol_config(&mut context, &protocol_keypair, protocol_id).await;
 
     let (user_log_pda, _) = Pubkey::find_program_address(
         &[b"user_log", protocol_id.as_ref(), wallet.as_ref()],
@@ -600,7 +600,7 @@ async fn test_replay_attempt() {
     fund_account(&mut context, &protocol_id, 10_000_000).await;
 
     let protocol_config_pda =
-        init_protocol_config(&mut context, protocol_id, protocol_keypair.pubkey()).await;
+        init_protocol_config(&mut context, &protocol_keypair, protocol_id).await;
 
     let (user_log_pda, _) = Pubkey::find_program_address(
         &[b"user_log", protocol_id.as_ref(), wallet.as_ref()],
@@ -795,7 +795,7 @@ async fn test_append_only_invariant() {
     fund_account(&mut context, &protocol_id, 10_000_000).await;
 
     let protocol_config_pda =
-        init_protocol_config(&mut context, protocol_id, protocol_keypair.pubkey()).await;
+        init_protocol_config(&mut context, &protocol_keypair, protocol_id).await;
 
     let (user_log_pda, _) = Pubkey::find_program_address(
         &[b"user_log", protocol_id.as_ref(), wallet.as_ref()],
@@ -873,4 +873,3 @@ async fn test_append_only_invariant() {
 
     assert_eq!(instruction_err, InstructionError::InvalidAccountData);
 }
-
