@@ -1,7 +1,18 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::pubkey::Pubkey;
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
+pub struct ProtocolConfig {
+    pub is_initialized: bool,
+    pub protocol_id: Pubkey,
+    pub authority: Pubkey,
+}
+
+impl ProtocolConfig {
+    pub const LEN: usize = 1 + 32 + 32;
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub struct UserLogState {
     pub is_initialized: bool,
     pub wallet: Pubkey,
@@ -16,7 +27,7 @@ impl UserLogState {
     pub const LEN: usize = 1 + 32 + 32 + 32 + 8 + (1 + 32) + 1;
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub struct ActivityEvent {
     pub wallet: Pubkey,
     pub protocol_id: Pubkey,
@@ -31,7 +42,7 @@ impl ActivityEvent {
     pub const LEN: usize = 32 + 32 + 1 + 8 + 8 + 32 + 32;
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub struct ActivityEventAccount {
     pub index: u64,
     pub event: ActivityEvent,
@@ -41,7 +52,7 @@ impl ActivityEventAccount {
     pub const LEN: usize = 8 + ActivityEvent::LEN;
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub struct ExportAuthorization {
     pub old_wallet: Pubkey,
     pub new_wallet: Pubkey,
@@ -55,7 +66,7 @@ impl ExportAuthorization {
     pub const LEN: usize = 32 + 32 + 32 + 8 + 32 + 32;
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub struct ExportAuthorizationState {
     pub is_initialized: bool,
     pub auth: ExportAuthorization,
@@ -66,7 +77,7 @@ impl ExportAuthorizationState {
     pub const LEN: usize = 1 + ExportAuthorization::LEN + 1;
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub struct MigratedStateLink {
     pub old_wallet: Pubkey,
     pub new_wallet: Pubkey,
@@ -78,3 +89,4 @@ pub struct MigratedStateLink {
 impl MigratedStateLink {
     pub const LEN: usize = 32 + 32 + 32 + 32 + 8;
 }
+

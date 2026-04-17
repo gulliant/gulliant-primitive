@@ -14,11 +14,12 @@ use crate::{
     instruction::GulliantInstruction,
     state::{
         ActivityEvent, ActivityEventAccount, ExportAuthorization, ExportAuthorizationState,
-        MigratedStateLink, UserLogState,
+        MigratedStateLink, ProtocolConfig, UserLogState,
     },
     utils::{compute_event_hash, verify_signer},
 };
 
+const PROTOCOL_CONFIG_SEED: &[u8] = b"protocol_config";
 const USER_LOG_SEED: &[u8] = b"user_log";
 const ACTIVITY_EVENT_SEED: &[u8] = b"activity_event";
 const EXPORT_AUTH_SEED: &[u8] = b"export_auth";
@@ -36,6 +37,15 @@ impl Processor {
             .map_err(|_| ProgramError::InvalidInstructionData)?;
 
         match instruction {
+            GulliantInstruction::InitializeProtocolConfig {
+                protocol_id,
+                authority,
+            } => Self::process_initialize_protocol_config(
+                program_id,
+                accounts,
+                protocol_id,
+                authority,
+            ),
             GulliantInstruction::InitializeUserLog { wallet, protocol_id } => {
                 Self::process_initialize_user_log(program_id, accounts, wallet, protocol_id)
             }
@@ -46,7 +56,13 @@ impl Processor {
                 magnitude,
                 timestamp,
             } => Self::process_append_activity_event(
-                program_id, accounts, wallet, protocol_id, event_type, magnitude, timestamp,
+                program_id,
+                accounts,
+                wallet,
+                protocol_id,
+                event_type,
+                magnitude,
+                timestamp,
             ),
             GulliantInstruction::AuthorizeExport {
                 old_wallet,
@@ -54,7 +70,12 @@ impl Processor {
                 protocol_id,
                 authorized_until,
             } => Self::process_authorize_export(
-                program_id, accounts, old_wallet, new_wallet, protocol_id, authorized_until,
+                program_id,
+                accounts,
+                old_wallet,
+                new_wallet,
+                protocol_id,
+                authorized_until,
             ),
             GulliantInstruction::MigrateState {
                 old_wallet,
@@ -62,9 +83,83 @@ impl Processor {
                 protocol_id,
                 current_timestamp,
             } => Self::process_migrate_state(
-                program_id, accounts, old_wallet, new_wallet, protocol_id, current_timestamp,
+                program_id,
+                accounts,
+                old_wallet,
+                new_wallet,
+                protocol_id,
+                current_timestamp,
             ),
         }
+    }
+
+    fn process_initialize_protocol_config(
+        program_id: &Pubkey,
+        accounts: &[AccountInfo],
+        protocol_id: Pubkey,
+        authority: Pubkey,
+    ) -> ProgramResult {
+        let accounts_iter = &mut accounts.iter();
+        let protocol_config_account = next_account_info(accounts_iter)?;
+        let payer = next_account_info(accounts_iter)?;
+        let system_program = next_account_info(accounts_iter)?;
+
+        if !verify_signer(payer) {
+            return Err(GulliantError::MissingUserSignature.into());
+        }
+
+        let (expected_pda, bump) = Pubkey::find_program_address(
+            &[PROTOCOL_CONFIG_SEED, protocol_id.as_ref()],
+            program_id,
+        );
+        if expected_pda != *protocol_config_account.key {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        if protocol_config_account.owner == program_id {
+            let data = protocol_config_account.try_borrow_data()?;
+            let mut data_slice: &[u8] = &data;
+            let state = ProtocolConfig::deserialize(&mut data_slice)?;
+            if state.is_initialized {
+                return Err(GulliantError::ProtocolConfigAlreadyInitialized.into());
+            }
+        } else if *protocol_config_account.owner == system_program::ID {
+            if protocol_config_account.data_len() > 0 {
+                return Err(ProgramError::AccountAlreadyInitialized);
+            }
+
+            let rent = solana_program::rent::Rent::get()?;
+            let lamports = rent.minimum_balance(ProtocolConfig::LEN);
+
+            invoke_signed(
+                &system_instruction::create_account(
+                    payer.key,
+                    protocol_config_account.key,
+                    lamports,
+                    ProtocolConfig::LEN as u64,
+                    program_id,
+                ),
+                &[
+                    payer.clone(),
+                    protocol_config_account.clone(),
+                    system_program.clone(),
+                ],
+                &[&[PROTOCOL_CONFIG_SEED, protocol_id.as_ref(), &[bump]]],
+            )?;
+        } else {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        let config = ProtocolConfig {
+            is_initialized: true,
+            protocol_id,
+            authority,
+        };
+
+        let mut data = protocol_config_account.try_borrow_mut_data()?;
+        config.serialize(&mut &mut data[..])?;
+
+        Ok(())
     }
 
     fn process_initialize_user_log(
@@ -151,12 +246,35 @@ impl Processor {
         let accounts_iter = &mut accounts.iter();
         let user_log_account = next_account_info(accounts_iter)?;
         let activity_event_account = next_account_info(accounts_iter)?;
+        let protocol_config_account = next_account_info(accounts_iter)?;
         let protocol_authority = next_account_info(accounts_iter)?;
         let system_program = next_account_info(accounts_iter)?;
 
         if !verify_signer(protocol_authority) {
             return Err(GulliantError::MissingProtocolSignature.into());
         }
+
+        let (expected_config_pda, _) = Pubkey::find_program_address(
+            &[PROTOCOL_CONFIG_SEED, protocol_id.as_ref()],
+            program_id,
+        );
+        if expected_config_pda != *protocol_config_account.key {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if protocol_config_account.owner != program_id {
+            return Err(ProgramError::UninitializedAccount);
+        }
+
+        let config_data = protocol_config_account.try_borrow_data()?;
+        let mut config_slice: &[u8] = &config_data;
+        let config = ProtocolConfig::deserialize(&mut config_slice)?;
+        if !config.is_initialized {
+            return Err(ProgramError::UninitializedAccount);
+        }
+        if config.protocol_id != protocol_id || config.authority != *protocol_authority.key {
+            return Err(GulliantError::InvalidProtocolAuthority.into());
+        }
+        drop(config_data);
 
         let (expected_user_log_pda, _) = Pubkey::find_program_address(
             &[USER_LOG_SEED, protocol_id.as_ref(), wallet.as_ref()],
@@ -186,6 +304,10 @@ impl Processor {
         let new_index = user_log.event_count;
 
         let index_bytes = new_index.to_le_bytes();
+
+        // Append-only invariant:
+        // a new event can only be written to the PDA derived from the current event_count.
+        // Existing event accounts cannot be reused because the expected PDA changes as event_count grows.
         let (expected_event_pda, bump) = Pubkey::find_program_address(
             &[ACTIVITY_EVENT_SEED, protocol_id.as_ref(), wallet.as_ref(), &index_bytes],
             program_id,
@@ -266,12 +388,35 @@ impl Processor {
         let accounts_iter = &mut accounts.iter();
         let user_log_account = next_account_info(accounts_iter)?;
         let export_auth_account = next_account_info(accounts_iter)?;
+        let protocol_config_account = next_account_info(accounts_iter)?;
         let protocol_authority = next_account_info(accounts_iter)?;
         let system_program = next_account_info(accounts_iter)?;
 
         if !verify_signer(protocol_authority) {
             return Err(GulliantError::MissingProtocolSignature.into());
         }
+
+        let (expected_config_pda, _) = Pubkey::find_program_address(
+            &[PROTOCOL_CONFIG_SEED, protocol_id.as_ref()],
+            program_id,
+        );
+        if expected_config_pda != *protocol_config_account.key {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if protocol_config_account.owner != program_id {
+            return Err(ProgramError::UninitializedAccount);
+        }
+
+        let config_data = protocol_config_account.try_borrow_data()?;
+        let mut config_slice: &[u8] = &config_data;
+        let config = ProtocolConfig::deserialize(&mut config_slice)?;
+        if !config.is_initialized {
+            return Err(ProgramError::UninitializedAccount);
+        }
+        if config.protocol_id != protocol_id || config.authority != *protocol_authority.key {
+            return Err(GulliantError::InvalidProtocolAuthority.into());
+        }
+        drop(config_data);
 
         let (expected_user_log_pda, _) = Pubkey::find_program_address(
             &[USER_LOG_SEED, protocol_id.as_ref(), old_wallet.as_ref()],
@@ -378,6 +523,7 @@ impl Processor {
         let export_auth_account = next_account_info(accounts_iter)?;
         let migrated_link_account = next_account_info(accounts_iter)?;
         let old_wallet_signer = next_account_info(accounts_iter)?;
+        let protocol_config_account = next_account_info(accounts_iter)?;
         let system_program = next_account_info(accounts_iter)?;
 
         if !verify_signer(old_wallet_signer) {
@@ -430,7 +576,28 @@ impl Processor {
         }
         drop(auth_data);
 
-        // EARLY REPLAY PROTECTION
+        let (expected_config_pda, _) = Pubkey::find_program_address(
+            &[PROTOCOL_CONFIG_SEED, protocol_id.as_ref()],
+            program_id,
+        );
+        if expected_config_pda != *protocol_config_account.key {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if protocol_config_account.owner != program_id {
+            return Err(ProgramError::UninitializedAccount);
+        }
+
+        let config_data = protocol_config_account.try_borrow_data()?;
+        let mut config_slice: &[u8] = &config_data;
+        let config = ProtocolConfig::deserialize(&mut config_slice)?;
+        if !config.is_initialized {
+            return Err(ProgramError::UninitializedAccount);
+        }
+        if config.protocol_id != protocol_id || config.authority != auth_state.auth.signer {
+            return Err(GulliantError::InvalidProtocolAuthority.into());
+        }
+        drop(config_data);
+
         if old_log.is_migrated {
             return Err(GulliantError::WalletAlreadyMigrated.into());
         }
@@ -489,11 +656,9 @@ impl Processor {
             let new_log_data = new_user_log_account.try_borrow_data()?;
             let mut new_log_slice: &[u8] = &new_log_data;
             let existing_new_log = UserLogState::deserialize(&mut new_log_slice)?;
-
             if existing_new_log.is_initialized {
                 return Err(GulliantError::WalletAlreadyMigrated.into());
             }
-
             drop(new_log_data);
         }
 

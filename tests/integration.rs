@@ -36,20 +36,22 @@ fn get_custom_error_code(err: BanksClientError) -> Option<u32> {
     match err {
         BanksClientError::TransactionError(TransactionError::InstructionError(
             _,
-            instruction_err,
-        )) => match instruction_err {
-            InstructionError::Custom(code) => Some(code),
-            _ => None,
-        },
+            InstructionError::Custom(code),
+        )) => Some(code),
         _ => None,
     }
 }
 
-async fn fund_account(
-    context: &mut ProgramTestContext,
-    recipient: &Pubkey,
-    lamports: u64,
-) {
+fn get_instruction_error(err: BanksClientError) -> Option<InstructionError> {
+    match err {
+        BanksClientError::TransactionError(TransactionError::InstructionError(_, instruction_err)) => {
+            Some(instruction_err)
+        }
+        _ => None,
+    }
+}
+
+async fn fund_account(context: &mut ProgramTestContext, recipient: &Pubkey, lamports: u64) {
     let tx = Transaction::new_signed_with_payer(
         &[system_instruction::transfer(
             &context.payer.pubkey(),
@@ -65,6 +67,43 @@ async fn fund_account(
     context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 }
 
+async fn init_protocol_config(
+    context: &mut ProgramTestContext,
+    protocol_id: Pubkey,
+    authority: Pubkey,
+) -> Pubkey {
+    let (protocol_config_pda, _) = Pubkey::find_program_address(
+        &[b"protocol_config", protocol_id.as_ref()],
+        &PROGRAM_ID,
+    );
+
+    let init_config_ix = Instruction {
+        program_id: PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(protocol_config_pda, false),
+            AccountMeta::new(context.payer.pubkey(), true),
+            AccountMeta::new(system_program::ID, false),
+        ],
+        data: to_vec(&GulliantInstruction::InitializeProtocolConfig {
+            protocol_id,
+            authority,
+        })
+        .unwrap(),
+    };
+
+    let tx = Transaction::new_signed_with_payer(
+        &[init_config_ix],
+        Some(&context.payer.pubkey()),
+        &[&context.payer],
+        context.last_blockhash,
+    );
+
+    context.banks_client.process_transaction(tx).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+
+    protocol_config_pda
+}
+
 #[tokio::test]
 async fn test_happy_path() {
     let (mut context, protocol_keypair, user_keypair) = setup().await;
@@ -73,6 +112,9 @@ async fn test_happy_path() {
 
     fund_account(&mut context, &wallet, 10_000_000).await;
     fund_account(&mut context, &protocol_id, 10_000_000).await;
+
+    let protocol_config_pda =
+        init_protocol_config(&mut context, protocol_id, protocol_keypair.pubkey()).await;
 
     let (user_log_pda, _) = Pubkey::find_program_address(
         &[b"user_log", protocol_id.as_ref(), wallet.as_ref()],
@@ -96,6 +138,7 @@ async fn test_happy_path() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let event_index = 0u64;
     let (event_pda, _) = Pubkey::find_program_address(
@@ -113,6 +156,7 @@ async fn test_happy_path() {
         accounts: vec![
             AccountMeta::new(user_log_pda, false),
             AccountMeta::new(event_pda, false),
+            AccountMeta::new(protocol_config_pda, false),
             AccountMeta::new(protocol_id, true),
             AccountMeta::new(system_program::ID, false),
         ],
@@ -133,6 +177,7 @@ async fn test_happy_path() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let account = context
         .banks_client
@@ -161,6 +206,7 @@ async fn test_happy_path() {
         accounts: vec![
             AccountMeta::new(user_log_pda, false),
             AccountMeta::new(auth_pda, false),
+            AccountMeta::new(protocol_config_pda, false),
             AccountMeta::new(protocol_id, true),
             AccountMeta::new(system_program::ID, false),
         ],
@@ -180,6 +226,7 @@ async fn test_happy_path() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let (new_user_log_pda, _) = Pubkey::find_program_address(
         &[b"user_log", protocol_id.as_ref(), new_wallet.as_ref()],
@@ -203,6 +250,7 @@ async fn test_happy_path() {
             AccountMeta::new(auth_pda, false),
             AccountMeta::new(link_pda, false),
             AccountMeta::new(wallet, true),
+            AccountMeta::new(protocol_config_pda, false),
             AccountMeta::new(system_program::ID, false),
         ],
         data: to_vec(&GulliantInstruction::MigrateState {
@@ -275,6 +323,9 @@ async fn test_missing_protocol_signature() {
     fund_account(&mut context, &wallet, 10_000_000).await;
     fund_account(&mut context, &protocol_id, 10_000_000).await;
 
+    let protocol_config_pda =
+        init_protocol_config(&mut context, protocol_id, protocol_keypair.pubkey()).await;
+
     let (user_log_pda, _) = Pubkey::find_program_address(
         &[b"user_log", protocol_id.as_ref(), wallet.as_ref()],
         &PROGRAM_ID,
@@ -297,6 +348,7 @@ async fn test_missing_protocol_signature() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let event_index = 0u64;
     let (event_pda, _) = Pubkey::find_program_address(
@@ -314,6 +366,7 @@ async fn test_missing_protocol_signature() {
         accounts: vec![
             AccountMeta::new(user_log_pda, false),
             AccountMeta::new(event_pda, false),
+            AccountMeta::new(protocol_config_pda, false),
             AccountMeta::new(protocol_id, false),
             AccountMeta::new(system_program::ID, false),
         ],
@@ -348,6 +401,9 @@ async fn test_snapshot_mismatch() {
     fund_account(&mut context, &wallet, 10_000_000).await;
     fund_account(&mut context, &protocol_id, 10_000_000).await;
 
+    let protocol_config_pda =
+        init_protocol_config(&mut context, protocol_id, protocol_keypair.pubkey()).await;
+
     let (user_log_pda, _) = Pubkey::find_program_address(
         &[b"user_log", protocol_id.as_ref(), wallet.as_ref()],
         &PROGRAM_ID,
@@ -370,6 +426,7 @@ async fn test_snapshot_mismatch() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let event_index = 0u64;
     let (event_pda, _) = Pubkey::find_program_address(
@@ -387,6 +444,7 @@ async fn test_snapshot_mismatch() {
         accounts: vec![
             AccountMeta::new(user_log_pda, false),
             AccountMeta::new(event_pda, false),
+            AccountMeta::new(protocol_config_pda, false),
             AccountMeta::new(protocol_id, true),
             AccountMeta::new(system_program::ID, false),
         ],
@@ -407,6 +465,7 @@ async fn test_snapshot_mismatch() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let new_wallet = Keypair::new().pubkey();
     let (auth_pda, _) = Pubkey::find_program_address(
@@ -424,6 +483,7 @@ async fn test_snapshot_mismatch() {
         accounts: vec![
             AccountMeta::new(user_log_pda, false),
             AccountMeta::new(auth_pda, false),
+            AccountMeta::new(protocol_config_pda, false),
             AccountMeta::new(protocol_id, true),
             AccountMeta::new(system_program::ID, false),
         ],
@@ -443,6 +503,7 @@ async fn test_snapshot_mismatch() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let event_index2 = 1u64;
     let (event_pda2, _) = Pubkey::find_program_address(
@@ -460,6 +521,7 @@ async fn test_snapshot_mismatch() {
         accounts: vec![
             AccountMeta::new(user_log_pda, false),
             AccountMeta::new(event_pda2, false),
+            AccountMeta::new(protocol_config_pda, false),
             AccountMeta::new(protocol_id, true),
             AccountMeta::new(system_program::ID, false),
         ],
@@ -480,6 +542,7 @@ async fn test_snapshot_mismatch() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx2).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let (new_user_log_pda, _) = Pubkey::find_program_address(
         &[b"user_log", protocol_id.as_ref(), new_wallet.as_ref()],
@@ -503,6 +566,7 @@ async fn test_snapshot_mismatch() {
             AccountMeta::new(auth_pda, false),
             AccountMeta::new(link_pda, false),
             AccountMeta::new(wallet, true),
+            AccountMeta::new(protocol_config_pda, false),
             AccountMeta::new(system_program::ID, false),
         ],
         data: to_vec(&GulliantInstruction::MigrateState {
@@ -535,6 +599,9 @@ async fn test_replay_attempt() {
     fund_account(&mut context, &wallet, 10_000_000).await;
     fund_account(&mut context, &protocol_id, 10_000_000).await;
 
+    let protocol_config_pda =
+        init_protocol_config(&mut context, protocol_id, protocol_keypair.pubkey()).await;
+
     let (user_log_pda, _) = Pubkey::find_program_address(
         &[b"user_log", protocol_id.as_ref(), wallet.as_ref()],
         &PROGRAM_ID,
@@ -557,6 +624,7 @@ async fn test_replay_attempt() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let (event_pda, _) = Pubkey::find_program_address(
         &[
@@ -573,6 +641,7 @@ async fn test_replay_attempt() {
         accounts: vec![
             AccountMeta::new(user_log_pda, false),
             AccountMeta::new(event_pda, false),
+            AccountMeta::new(protocol_config_pda, false),
             AccountMeta::new(protocol_id, true),
             AccountMeta::new(system_program::ID, false),
         ],
@@ -593,6 +662,7 @@ async fn test_replay_attempt() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let new_wallet = Keypair::new().pubkey();
     let (auth_pda, _) = Pubkey::find_program_address(
@@ -610,6 +680,7 @@ async fn test_replay_attempt() {
         accounts: vec![
             AccountMeta::new(user_log_pda, false),
             AccountMeta::new(auth_pda, false),
+            AccountMeta::new(protocol_config_pda, false),
             AccountMeta::new(protocol_id, true),
             AccountMeta::new(system_program::ID, false),
         ],
@@ -629,6 +700,7 @@ async fn test_replay_attempt() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let (new_user_log_pda, _) = Pubkey::find_program_address(
         &[b"user_log", protocol_id.as_ref(), new_wallet.as_ref()],
@@ -652,6 +724,7 @@ async fn test_replay_attempt() {
             AccountMeta::new(auth_pda, false),
             AccountMeta::new(link_pda, false),
             AccountMeta::new(wallet, true),
+            AccountMeta::new(protocol_config_pda, false),
             AccountMeta::new(system_program::ID, false),
         ],
         data: to_vec(&GulliantInstruction::MigrateState {
@@ -681,7 +754,6 @@ async fn test_replay_attempt() {
         .unwrap();
     let mut old_log_slice: &[u8] = &old_log_account.data;
     let old_log = UserLogState::deserialize(&mut old_log_slice).unwrap();
-
     assert!(old_log.is_migrated);
     assert_eq!(old_log.migrated_to, Some(new_wallet));
 
@@ -693,7 +765,6 @@ async fn test_replay_attempt() {
         .unwrap();
     let mut auth_slice: &[u8] = &auth_account.data;
     let auth_state = ExportAuthorizationState::deserialize(&mut auth_slice).unwrap();
-
     assert!(auth_state.used);
 
     let tx = Transaction::new_signed_with_payer(
@@ -713,3 +784,93 @@ async fn test_replay_attempt() {
         code
     );
 }
+
+#[tokio::test]
+async fn test_append_only_invariant() {
+    let (mut context, protocol_keypair, user_keypair) = setup().await;
+    let wallet = user_keypair.pubkey();
+    let protocol_id = protocol_keypair.pubkey();
+
+    fund_account(&mut context, &wallet, 10_000_000).await;
+    fund_account(&mut context, &protocol_id, 10_000_000).await;
+
+    let protocol_config_pda =
+        init_protocol_config(&mut context, protocol_id, protocol_keypair.pubkey()).await;
+
+    let (user_log_pda, _) = Pubkey::find_program_address(
+        &[b"user_log", protocol_id.as_ref(), wallet.as_ref()],
+        &PROGRAM_ID,
+    );
+
+    let init_ix = Instruction {
+        program_id: PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(user_log_pda, false),
+            AccountMeta::new(wallet, true),
+            AccountMeta::new(system_program::ID, false),
+        ],
+        data: to_vec(&GulliantInstruction::InitializeUserLog { wallet, protocol_id }).unwrap(),
+    };
+
+    let tx = Transaction::new_signed_with_payer(
+        &[init_ix],
+        Some(&context.payer.pubkey()),
+        &[&context.payer, &user_keypair],
+        context.last_blockhash,
+    );
+    context.banks_client.process_transaction(tx).await.unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+
+    let event_index = 0u64;
+    let (event_pda, _) = Pubkey::find_program_address(
+        &[
+            b"activity_event",
+            protocol_id.as_ref(),
+            wallet.as_ref(),
+            &event_index.to_le_bytes(),
+        ],
+        &PROGRAM_ID,
+    );
+
+    let append_ix = Instruction {
+        program_id: PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(user_log_pda, false),
+            AccountMeta::new(event_pda, false),
+            AccountMeta::new(protocol_config_pda, false),
+            AccountMeta::new(protocol_id, true),
+            AccountMeta::new(system_program::ID, false),
+        ],
+        data: to_vec(&GulliantInstruction::AppendActivityEvent {
+            wallet,
+            protocol_id,
+            event_type: 1,
+            magnitude: 100,
+            timestamp: 1000,
+        })
+        .unwrap(),
+    };
+
+    let tx = Transaction::new_signed_with_payer(
+        &[append_ix.clone()],
+        Some(&context.payer.pubkey()),
+        &[&context.payer, &protocol_keypair],
+        context.last_blockhash,
+    );
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+
+    let tx = Transaction::new_signed_with_payer(
+        &[append_ix],
+        Some(&context.payer.pubkey()),
+        &[&context.payer, &protocol_keypair],
+        context.last_blockhash,
+    );
+
+    let err = context.banks_client.process_transaction(tx).await.unwrap_err();
+    let instruction_err = get_instruction_error(err).unwrap();
+
+    assert_eq!(instruction_err, InstructionError::InvalidAccountData);
+}
+

@@ -1,8 +1,12 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::pubkey::Pubkey;
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub enum GulliantInstruction {
+    InitializeProtocolConfig {
+        protocol_id: Pubkey,
+        authority: Pubkey,
+    },
     InitializeUserLog {
         wallet: Pubkey,
         protocol_id: Pubkey,
