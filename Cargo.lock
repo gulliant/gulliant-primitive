@@ -266,7 +266,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94893f1e0c6eeab764ade8dc4c0db24caf4fe7cbbaafc0eba0a9030f447b5185"
 dependencies = [
  "num-traits",
- "rand 0.8.5",
+ "rand 0.8.6",
 ]
 
 [[package]]
@@ -2677,7 +2677,7 @@ dependencies = [
  "lazy_static",
  "percent-encoding",
  "pin-project",
- "rand 0.8.5",
+ "rand 0.8.6",
  "thiserror",
 ]
 
@@ -3023,7 +3023,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "141bf7dfde2fbc246bfd3fe12f2455aa24b0fbd9af535d8c86c7bd1381ff2b1a"
 dependencies = [
  "bytes",
- "rand 0.8.5",
+ "rand 0.8.6",
  "ring 0.16.20",
  "rustc-hash",
  "rustls",
@@ -3083,9 +3083,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.8.5"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+checksum = "5ca0ecfa931c29007047d1bc58e623ab12e5590e8c7cc53200d5202b69266d8a"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
@@ -3802,7 +3802,7 @@ dependencies = [
  "ouroboros",
  "percentage",
  "qualifier_attr",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rayon",
  "regex",
  "rustc_version",
@@ -3931,7 +3931,7 @@ dependencies = [
  "memmap2",
  "modular-bitfield",
  "num_enum 0.7.6",
- "rand 0.8.5",
+ "rand 0.8.6",
  "solana-measure",
  "solana-sdk",
  "tempfile",
@@ -4023,7 +4023,7 @@ dependencies = [
  "futures-util",
  "indexmap 2.14.0",
  "log",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rayon",
  "rcgen",
  "solana-measure",
@@ -4154,7 +4154,7 @@ dependencies = [
  "crossbeam-channel",
  "log",
  "nix",
- "rand 0.8.5",
+ "rand 0.8.6",
  "serde",
  "serde_derive",
  "socket2 0.5.10",
@@ -4188,7 +4188,7 @@ dependencies = [
  "libc",
  "log",
  "nix",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rayon",
  "rustc_version",
  "serde",
@@ -4237,7 +4237,7 @@ dependencies = [
  "num-derive 0.4.2",
  "num-traits",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rustc_version",
  "rustversion",
  "serde",
@@ -4271,7 +4271,7 @@ dependencies = [
  "num-derive 0.4.2",
  "num-traits",
  "percentage",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rustc_version",
  "serde",
  "solana-frozen-abi",
@@ -4492,7 +4492,7 @@ dependencies = [
  "ouroboros",
  "percentage",
  "qualifier_attr",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rayon",
  "regex",
  "rustc_version",
@@ -4566,7 +4566,7 @@ dependencies = [
  "qstring",
  "qualifier_attr",
  "rand 0.7.3",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rustc_version",
  "rustversion",
  "serde",
@@ -4661,7 +4661,7 @@ dependencies = [
  "pkcs8",
  "quinn",
  "quinn-proto",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rcgen",
  "rustls",
  "smallvec",
@@ -4878,7 +4878,7 @@ dependencies = [
  "hash32",
  "libc",
  "log",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rustc-demangle",
  "scroll",
  "thiserror",
@@ -5267,7 +5267,7 @@ dependencies = [
  "humantime",
  "opentelemetry",
  "pin-project",
- "rand 0.8.5",
+ "rand 0.8.6",
  "serde",
  "static_assertions",
  "tarpc-plugins",
@@ -5472,9 +5472,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.52.0"
+version = "1.52.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a91135f59b1cbf38c91e73cf3386fca9bb77915c45ce2771460c9d92f0f3d776"
+checksum = "b67dee974fe86fd92cc45b7a95fdd2f99a36a6d7b0d431a231178d3d670bbcc6"
 dependencies = [
  "bytes",
  "libc",
@@ -5715,7 +5715,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rustls",
  "sha1",
  "thiserror",
