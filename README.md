@@ -74,9 +74,13 @@ The SHA-256 values match, confirming that the deployed program corresponds to th
 
 ## Presentation
 
-A short presentation deck is available here:
+The current presentation deck used for the hackathon submission:
 
-[View presentation](./docs/gulliant-primitive-deck.pdf)
+[View presentation](./docs/gulliant-deck.pdf)
+
+Previous version archived here:
+
+[Archive](./docs/archive/gulliant-primitive-deck.pdf)
 
 ---
 
