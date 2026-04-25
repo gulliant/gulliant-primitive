@@ -1,66 +1,62 @@
-Copyright (c) 2026 Ruslan Shermadov
+Copyright (c) 2026 Ruslan Shermadov. All rights reserved.
 
-All rights reserved.
+---
 
-This repository and its contents are proprietary. No confidentiality is implied under hackathon rules.
+OWNERSHIP
 
-No license is granted to use, copy, modify, merge, publish, distribute, sublicense, sell, or create derivative works from this codebase, in whole or in part, except as explicitly stated below.
+This repository and all its contents are proprietary.
+No rights are granted except as explicitly stated below.
 
-Limited Evaluation License
+---
 
-A limited, non-exclusive, non-transferable, revocable license is granted solely for the purpose of evaluating this project in the context of the:
+LIMITED EVALUATION LICENSE
 
-Solana Frontier Hackathon (April 6 – May 11, 2026)
+Permission is granted, solely for the duration of the
+Solana Frontier Hackathon (April 6 – May 11, 2026), to:
 
-This license applies only to:
+  - view and inspect the source code
+  - clone the repository locally
+  - build the program from source to verify the SHA-256 hash
+  - run the integration tests locally
+  - evaluate the system for hackathon judging purposes
 
-authorized judges
-organizers
-designated reviewers officially involved in the evaluation process
+This permission applies only within the context of
+official hackathon evaluation.
 
-Permitted actions under this license:
+---
 
-viewing the source code
-running the code for evaluation purposes
-internal discussion strictly within the authorized evaluation group
+RESTRICTIONS
 
-Strictly prohibited:
+The following are strictly prohibited:
 
-copying or redistributing the code
-sharing the code with unauthorized third parties
-using the code for any commercial or non-commercial purpose
-creating derivative works
-deploying the code in any environment outside evaluation scope
-Ownership
+  - use of this code for any commercial purpose
+  - redistribution of the source code or compiled artifacts
+  - deployment of this program to Solana mainnet
+  - modification or derivative works for any production use
+  - use outside the Solana Frontier Hackathon evaluation context
 
-All intellectual property rights remain exclusively with the author.
+---
 
-No rights are granted by implication, estoppel, or otherwise.
+NO WARRANTY
 
-Security & Confidentiality
+This software is provided as-is, without warranty of any kind.
+The author makes no guarantees of correctness, fitness for purpose,
+or security beyond what is demonstrated in the evaluation context.
 
-This codebase may contain novel protocol design, architecture, and mechanisms.
+---
 
-Unauthorized use, reproduction, or disclosure may cause significant harm and will be subject to legal action.
+TERMINATION
 
-Termination
+This license terminates automatically upon the earlier of:
 
-This limited evaluation license automatically terminates upon the earliest of:
+  - the public announcement of Solana Frontier Hackathon results
+  - May 11, 2026
 
-the official public announcement of results of the Solana Frontier Hackathon (April 6 – May 11, 2026); or
-the completion of judging and evaluation processes related to this hackathon.
+After termination, all rights revert exclusively to the author.
 
-After termination:
+---
 
-any access to the code must cease
-any retention, use, or distribution is strictly prohibited
-Disclaimer
+CONTACT
 
-The software is provided "as is", without warranty of any kind.
-
-Contact
-
-For licensing, partnership, or commercial use inquiries:
-
-Ruslan Shermadov
+For licensing inquiries outside this evaluation context:
 founder@gulliant.com
