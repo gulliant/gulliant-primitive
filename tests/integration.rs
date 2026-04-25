@@ -106,6 +106,9 @@ async fn init_protocol_config(
 
 #[tokio::test]
 async fn test_happy_path() {
+    println!("\n==========");
+    println!("HAPPY PATH");
+    println!("User accumulates activity");
     let (mut context, protocol_keypair, user_keypair) = setup().await;
     let wallet = user_keypair.pubkey();
     let protocol_id = protocol_keypair.pubkey();
@@ -177,6 +180,8 @@ async fn test_happy_path() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    println!("Activity event appended");
+    println!("matchmaking_tier: 100");
     context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let account = context
@@ -226,6 +231,7 @@ async fn test_happy_path() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    println!("Export authorized by protocol");
     context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let (new_user_log_pda, _) = Pubkey::find_program_address(
@@ -269,6 +275,10 @@ async fn test_happy_path() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    println!("Migration executed");
+    println!("Old wallet marked as migrated");
+    println!("New wallet received state");
+    println!("MIGRATION COMPLETE — old wallet locked");
 
     let old_account = context
         .banks_client
@@ -316,6 +326,9 @@ async fn test_happy_path() {
 
 #[tokio::test]
 async fn test_missing_protocol_signature() {
+    println!("\n===================================");
+    println!("FAILURE: MISSING PROTOCOL SIGNATURE");
+    println!("Attempting to append activity without protocol signature...");
     let (mut context, protocol_keypair, user_keypair) = setup().await;
     let wallet = user_keypair.pubkey();
     let protocol_id = protocol_keypair.pubkey();
@@ -389,11 +402,16 @@ async fn test_missing_protocol_signature() {
 
     let err = context.banks_client.process_transaction(tx).await.unwrap_err();
     let code = get_custom_error_code(err).unwrap();
+    println!("Result: REJECTED");
+    println!("Reason: MissingProtocolSignature");
     assert_eq!(code, GulliantError::MissingProtocolSignature as u32);
 }
 
 #[tokio::test]
 async fn test_snapshot_mismatch() {
+    println!("\n==========================");
+    println!("FAILURE: SNAPSHOT MISMATCH");
+    println!("Initial activity appended");
     let (mut context, protocol_keypair, user_keypair) = setup().await;
     let wallet = user_keypair.pubkey();
     let protocol_id = protocol_keypair.pubkey();
@@ -503,6 +521,7 @@ async fn test_snapshot_mismatch() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    println!("Export authorized at snapshot hash");
     context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let event_index2 = 1u64;
@@ -542,6 +561,8 @@ async fn test_snapshot_mismatch() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx2).await.unwrap();
+    println!("New activity appended AFTER authorization");
+    println!("Snapshot is now stale");
     context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
     let (new_user_log_pda, _) = Pubkey::find_program_address(
@@ -585,13 +606,19 @@ async fn test_snapshot_mismatch() {
         context.last_blockhash,
     );
 
+    println!("Attempting migration with outdated snapshot...");
     let err = context.banks_client.process_transaction(tx).await.unwrap_err();
     let code = get_custom_error_code(err).unwrap();
+    println!("Result: REJECTED");
+    println!("Reason: SnapshotHashMismatch");
     assert_eq!(code, GulliantError::SnapshotHashMismatch as u32);
 }
 
 #[tokio::test]
 async fn test_replay_attempt() {
+    println!("\n=======================");
+    println!("FAILURE: REPLAY ATTEMPT");
+    println!("First migration will succeed");
     let (mut context, protocol_keypair, user_keypair) = setup().await;
     let wallet = user_keypair.pubkey();
     let protocol_id = protocol_keypair.pubkey();
@@ -743,6 +770,8 @@ async fn test_replay_attempt() {
         context.last_blockhash,
     );
     context.banks_client.process_transaction(tx).await.unwrap();
+    println!("First migration: SUCCESS");
+    println!("Authorization consumed");
 
     context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
 
@@ -774,9 +803,12 @@ async fn test_replay_attempt() {
         context.last_blockhash,
     );
 
+    println!("Attempting to reuse authorization...");
     let err = context.banks_client.process_transaction(tx).await.unwrap_err();
     let code = get_custom_error_code(err).unwrap();
 
+    println!("Result: REJECTED");
+    println!("Reason: ExportAuthorizationAlreadyUsed or WalletAlreadyMigrated");
     assert!(
         code == GulliantError::ExportAuthorizationAlreadyUsed as u32
             || code == GulliantError::WalletAlreadyMigrated as u32,
