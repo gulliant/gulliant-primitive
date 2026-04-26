@@ -808,13 +808,15 @@ async fn test_replay_attempt() {
     let code = get_custom_error_code(err).unwrap();
 
     println!("Result: REJECTED");
-    println!("Reason: ExportAuthorizationAlreadyUsed or WalletAlreadyMigrated");
-    assert!(
-        code == GulliantError::ExportAuthorizationAlreadyUsed as u32
-            || code == GulliantError::WalletAlreadyMigrated as u32,
-        "unexpected replay error code: {}",
-        code
-    );
+    match code {
+        code if code == GulliantError::ExportAuthorizationAlreadyUsed as u32 => {
+            println!("Reason: ExportAuthorizationAlreadyUsed");
+        }
+        code if code == GulliantError::WalletAlreadyMigrated as u32 => {
+            println!("Reason: WalletAlreadyMigrated");
+        }
+        unexpected => panic!("unexpected replay error code: {}", unexpected),
+    }
 }
 
 #[tokio::test]
