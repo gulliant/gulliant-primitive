@@ -2,11 +2,10 @@
 
 use borsh::{to_vec, BorshDeserialize};
 use solana_program::{
-    instruction::{AccountMeta, Instruction},
     instruction::InstructionError,
+    instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
-    system_instruction,
-    system_program,
+    system_instruction, system_program,
 };
 use solana_program_test::{processor, BanksClientError, ProgramTest, ProgramTestContext};
 use solana_sdk::{
@@ -23,9 +22,12 @@ use gulliant_v1::{
 
 const PROGRAM_ID: Pubkey = gulliant_v1::ID;
 
+const GREEN: &str = "\x1b[32m";
+const RED: &str = "\x1b[31m";
+const RESET: &str = "\x1b[0m";
+
 async fn setup() -> (ProgramTestContext, Keypair, Keypair) {
-    let program_test =
-        ProgramTest::new("gulliant_v1", PROGRAM_ID, processor!(Processor::process));
+    let program_test = ProgramTest::new("gulliant_v1", PROGRAM_ID, processor!(Processor::process));
     let context = program_test.start_with_context().await;
     let protocol_keypair = Keypair::new();
     let user_keypair = Keypair::new();
@@ -44,9 +46,10 @@ fn get_custom_error_code(err: BanksClientError) -> Option<u32> {
 
 fn get_instruction_error(err: BanksClientError) -> Option<InstructionError> {
     match err {
-        BanksClientError::TransactionError(TransactionError::InstructionError(_, instruction_err)) => {
-            Some(instruction_err)
-        }
+        BanksClientError::TransactionError(TransactionError::InstructionError(
+            _,
+            instruction_err,
+        )) => Some(instruction_err),
         _ => None,
     }
 }
@@ -72,10 +75,8 @@ async fn init_protocol_config(
     authority_keypair: &Keypair,
     protocol_id: Pubkey,
 ) -> Pubkey {
-    let (protocol_config_pda, _) = Pubkey::find_program_address(
-        &[b"protocol_config", protocol_id.as_ref()],
-        &PROGRAM_ID,
-    );
+    let (protocol_config_pda, _) =
+        Pubkey::find_program_address(&[b"protocol_config", protocol_id.as_ref()], &PROGRAM_ID);
 
     let init_config_ix = Instruction {
         program_id: PROGRAM_ID,
@@ -131,7 +132,11 @@ async fn test_happy_path() {
             AccountMeta::new(wallet, true),
             AccountMeta::new(system_program::ID, false),
         ],
-        data: to_vec(&GulliantInstruction::InitializeUserLog { wallet, protocol_id }).unwrap(),
+        data: to_vec(&GulliantInstruction::InitializeUserLog {
+            wallet,
+            protocol_id,
+        })
+        .unwrap(),
     };
 
     let tx = Transaction::new_signed_with_payer(
@@ -278,7 +283,7 @@ async fn test_happy_path() {
     println!("Migration executed");
     println!("Old wallet marked as migrated");
     println!("New wallet received state");
-    println!("MIGRATION COMPLETE — old wallet locked");
+    println!("{}MIGRATION COMPLETE — old wallet locked{}", GREEN, RESET);
 
     let old_account = context
         .banks_client
@@ -351,7 +356,11 @@ async fn test_missing_protocol_signature() {
             AccountMeta::new(wallet, true),
             AccountMeta::new(system_program::ID, false),
         ],
-        data: to_vec(&GulliantInstruction::InitializeUserLog { wallet, protocol_id }).unwrap(),
+        data: to_vec(&GulliantInstruction::InitializeUserLog {
+            wallet,
+            protocol_id,
+        })
+        .unwrap(),
     };
 
     let tx = Transaction::new_signed_with_payer(
@@ -400,9 +409,13 @@ async fn test_missing_protocol_signature() {
         context.last_blockhash,
     );
 
-    let err = context.banks_client.process_transaction(tx).await.unwrap_err();
+    let err = context
+        .banks_client
+        .process_transaction(tx)
+        .await
+        .unwrap_err();
     let code = get_custom_error_code(err).unwrap();
-    println!("Result: REJECTED");
+    println!("{}Result: REJECTED{}", RED, RESET);
     println!("Reason: MissingProtocolSignature");
     assert_eq!(code, GulliantError::MissingProtocolSignature as u32);
 }
@@ -434,7 +447,11 @@ async fn test_snapshot_mismatch() {
             AccountMeta::new(wallet, true),
             AccountMeta::new(system_program::ID, false),
         ],
-        data: to_vec(&GulliantInstruction::InitializeUserLog { wallet, protocol_id }).unwrap(),
+        data: to_vec(&GulliantInstruction::InitializeUserLog {
+            wallet,
+            protocol_id,
+        })
+        .unwrap(),
     };
 
     let tx = Transaction::new_signed_with_payer(
@@ -607,9 +624,13 @@ async fn test_snapshot_mismatch() {
     );
 
     println!("Attempting migration with outdated snapshot...");
-    let err = context.banks_client.process_transaction(tx).await.unwrap_err();
+    let err = context
+        .banks_client
+        .process_transaction(tx)
+        .await
+        .unwrap_err();
     let code = get_custom_error_code(err).unwrap();
-    println!("Result: REJECTED");
+    println!("{}Result: REJECTED{}", RED, RESET);
     println!("Reason: SnapshotHashMismatch");
     assert_eq!(code, GulliantError::SnapshotHashMismatch as u32);
 }
@@ -618,7 +639,6 @@ async fn test_snapshot_mismatch() {
 async fn test_replay_attempt() {
     println!("\n=======================");
     println!("FAILURE: REPLAY ATTEMPT");
-    println!("First migration will succeed");
     let (mut context, protocol_keypair, user_keypair) = setup().await;
     let wallet = user_keypair.pubkey();
     let protocol_id = protocol_keypair.pubkey();
@@ -641,7 +661,11 @@ async fn test_replay_attempt() {
             AccountMeta::new(wallet, true),
             AccountMeta::new(system_program::ID, false),
         ],
-        data: to_vec(&GulliantInstruction::InitializeUserLog { wallet, protocol_id }).unwrap(),
+        data: to_vec(&GulliantInstruction::InitializeUserLog {
+            wallet,
+            protocol_id,
+        })
+        .unwrap(),
     };
 
     let tx = Transaction::new_signed_with_payer(
@@ -796,6 +820,10 @@ async fn test_replay_attempt() {
     let auth_state = ExportAuthorizationState::deserialize(&mut auth_slice).unwrap();
     assert!(auth_state.used);
 
+    let current_slot = context.banks_client.get_root_slot().await.unwrap();
+    context.warp_to_slot(current_slot + 1).unwrap();
+    context.last_blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+
     let tx = Transaction::new_signed_with_payer(
         &[migrate_ix],
         Some(&context.payer.pubkey()),
@@ -804,18 +832,40 @@ async fn test_replay_attempt() {
     );
 
     println!("Attempting to reuse authorization...");
-    let err = context.banks_client.process_transaction(tx).await.unwrap_err();
-    let code = get_custom_error_code(err).unwrap();
+    let err = context
+        .banks_client
+        .process_transaction(tx)
+        .await
+        .unwrap_err();
 
-    println!("Result: REJECTED");
-    match code {
-        code if code == GulliantError::ExportAuthorizationAlreadyUsed as u32 => {
-            println!("Reason: ExportAuthorizationAlreadyUsed");
-        }
-        code if code == GulliantError::WalletAlreadyMigrated as u32 => {
+    println!("{}Result: REJECTED{}", RED, RESET);
+
+    match err {
+        BanksClientError::TransactionError(TransactionError::InstructionError(
+            _,
+            InstructionError::Custom(code),
+        )) => match code {
+            code if code == GulliantError::ExportAuthorizationAlreadyUsed as u32 => {
+                println!("Reason: ExportAuthorizationAlreadyUsed");
+            }
+            code if code == GulliantError::WalletAlreadyMigrated as u32 => {
+                println!("Reason: WalletAlreadyMigrated");
+            }
+            unexpected => panic!("unexpected custom error code: {}", unexpected),
+        },
+        BanksClientError::TransactionError(TransactionError::InstructionError(
+            _,
+            InstructionError::InvalidAccountData,
+        )) => {
             println!("Reason: WalletAlreadyMigrated");
         }
-        unexpected => panic!("unexpected replay error code: {}", unexpected),
+        BanksClientError::TransactionError(TransactionError::InstructionError(
+            _,
+            InstructionError::AccountAlreadyInitialized,
+        )) => {
+            println!("Reason: WalletAlreadyMigrated");
+        }
+        unexpected => panic!("unexpected error: {:?}", unexpected),
     }
 }
 
@@ -843,7 +893,11 @@ async fn test_append_only_invariant() {
             AccountMeta::new(wallet, true),
             AccountMeta::new(system_program::ID, false),
         ],
-        data: to_vec(&GulliantInstruction::InitializeUserLog { wallet, protocol_id }).unwrap(),
+        data: to_vec(&GulliantInstruction::InitializeUserLog {
+            wallet,
+            protocol_id,
+        })
+        .unwrap(),
     };
 
     let tx = Transaction::new_signed_with_payer(
@@ -902,7 +956,11 @@ async fn test_append_only_invariant() {
         context.last_blockhash,
     );
 
-    let err = context.banks_client.process_transaction(tx).await.unwrap_err();
+    let err = context
+        .banks_client
+        .process_transaction(tx)
+        .await
+        .unwrap_err();
     let instruction_err = get_instruction_error(err).unwrap();
 
     assert_eq!(instruction_err, InstructionError::InvalidAccountData);
