@@ -12,6 +12,10 @@ use std::str::FromStr;
 
 const STATE_SEED: &[u8] = b"naive_character_state";
 
+const YELLOW: &str = "\x1b[33m";
+const RED: &str = "\x1b[31m";
+const RESET: &str = "\x1b[0m";
+
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub struct NaiveCharacterState {
     pub is_initialized: bool,
@@ -201,21 +205,23 @@ fn main() {
             println!("state_pda: {}", state_pda);
             println!("new_owner: {}", state.character_owner);
             println!(
-                "matchmaking_tier: {}   <- from previous player",
-                state.matchmaking_tier
+                "matchmaking_tier: {}{}   <- from previous player{}",
+                YELLOW, state.matchmaking_tier, RESET
             );
             println!(
-                "permissions_level: {}   <- from previous player",
+                "permissions_level: {}{}   <- from previous player{}",
+                YELLOW,
                 match state.permissions_level {
                     0 => "none".to_string(),
                     1 => "basic".to_string(),
                     2 => "veteran".to_string(),
                     v => format!("unknown({})", v),
-                }
+                },
+                RESET
             );
 
-            println!("\nWARNING: This state belonged to the previous player");
-            println!("WARNING: It moved with the asset");
+            println!("\n{}WARNING: This state belonged to the previous player{}", RED, RESET);
+            println!("{}WARNING: It moved with the asset{}", RED, RESET);
         }
     }
 }
