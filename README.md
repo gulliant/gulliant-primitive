@@ -63,7 +63,7 @@ Download the deployed binary from Devnet and compare it against the
 local build:
 
 ```bash
-solana program dump DyQAWvMytpgRiE2T9bhzSFCe9b9actobfHFB7RVReX7g   deployed_program.so --url devnet
+solana program dump DyQAWvMytpgRiE2T9bhzSFCe9b9actobfHFB7RVReX7g deployed_program.so --url devnet
 
 sha256sum target/deploy/gulliant_v1.so deployed_program.so
 ```
@@ -84,11 +84,8 @@ build artifact produced from this repository.
 | Field                | Value                                                                                      |
 | -------------------- | ------------------------------------------------------------------------------------------ |
 | ProgramData Address  | `DhGijfy3UBgfPomqZy1JxDPiVQTZEqM353BwM5VXSmT2`                                             |
-| Upgrade Authority    | `Hzv7TeyyKSDNpn4tueXGUZvH3FjudHu4pLR19iXFGzsQ`                                             |
+| Upgrade Authority    | `none`                                                                                     |
 | Deployment Signature | `3b5RsGYJ2BBtr7giVAtXt2AzF7VA9XvhqJgzPvtJMopL7s3MZYYjc4JSMHt1fEPbSETRuokVaW16Ngt9m2SYdrfV` |
-
-> Upgrade authority is non-null. On-chain guarantees are conditional on
-> the upgrade authority not modifying the program after verification.
 
 ---
 
