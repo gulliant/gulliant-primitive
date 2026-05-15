@@ -1,3 +1,4 @@
+
 Copyright (c) 2026 Ruslan Shermadov. All rights reserved.
 
 OWNERSHIP
@@ -14,12 +15,17 @@ Permission is granted solely for the following purposes:
   - Solana Frontier Hackathon judging and evaluation
   - Colosseum accelerator review and selection process
   - follow-up evaluation processes directly related to the above
+  - side track evaluation on Superteam Earn related to
+    the Solana Frontier Hackathon
 
 Authorized parties include:
 
   - official Solana Frontier Hackathon judges and organizers
   - Colosseum accelerator team and designated reviewers
   - parties invited by Colosseum as part of their evaluation process
+  - official judges and organizers of Solana Frontier Hackathon
+    side tracks hosted on Superteam Earn,
+    including Superteam KZ and Metaforra
 
 Permitted actions:
 
@@ -29,7 +35,7 @@ Permitted actions:
   - run the integration tests locally
   - evaluate, review, and discuss the system within authorized groups
   - share access with other authorized parties within the
-    Colosseum evaluation process
+    authorized evaluation process
 
 This license remains valid as long as evaluation activity
 related to the Solana Frontier Hackathon or Colosseum accelerator
